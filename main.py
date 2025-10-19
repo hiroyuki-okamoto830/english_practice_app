@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import time
 from time import sleep
 from pathlib import Path
 from streamlit.components.v1 import html

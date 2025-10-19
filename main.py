@@ -20,10 +20,19 @@ import constants as ct
 
 # 各種設定
 load_dotenv()
-st.set_page_config(page_title=ct.APP_NAME)
+#st.set_page_config(page_title=ct.APP_NAME)
+st.set_page_config(
+    page_title=ct.APP_NAME,
+    page_icon="🎧",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
+
 
 # タイトル表示
-st.markdown(f"## {ct.APP_NAME}")
+#st.markdown(f"## {ct.APP_NAME}")
+st.markdown("<h1 style='text-align:center;'>🎧生成AI英会話アプリ</h1>", unsafe_allow_html=True)
+
 
 # 初期処理
 if "messages" not in st.session_state:

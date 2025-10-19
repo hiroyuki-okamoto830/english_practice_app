@@ -18,25 +18,110 @@ from langchain.memory import ConversationSummaryBufferMemory
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationChain
 import constants as ct
+import sounddevice as sd
+import numpy as np
+import wave
 
-def record_audio(audio_input_file_path):
+#def record_audio(audio_input_file_path):
+#    """
+#    音声入力を受け取って音声ファイルを作成
+#    """
+
+#    audio = audiorecorder(
+#        start_prompt="発話開始",
+#        pause_prompt="やり直す",
+#        stop_prompt="発話終了",
+#        start_style={"color":"white", "background-color":"black"},
+#        pause_style={"color":"gray", "background-color":"white"},
+#        stop_style={"color":"white", "background-color":"black"}
+#    )
+
+#    if len(audio) > 0:
+#        audio.export(audio_input_file_path, format="wav")
+#    else:
+#        st.stop()
+
+
+def record_audio(audio_input_file_path, samplerate=16000, channels=1, silence_threshold=0.02, silence_duration=5):
     """
-    音声入力を受け取って音声ファイルを作成
+    無音が silence_duration 秒続いたら自動停止する録音関数（Streamlit対応・実時間カウント版）
+    - 最後に音があった時刻を基準に無音時間を算出するため、秒数カウントが正確になります。
+    Args:
+        audio_input_file_path: 出力WAVファイルパス
+        samplerate: サンプリングレート
+        channels: チャンネル数
+        silence_threshold: 無音判定の閾値（float 0.0~1.0）
+        silence_duration: 無音が続く秒数で録音停止
     """
 
-    audio = audiorecorder(
-        start_prompt="発話開始",
-        pause_prompt="やり直す",
-        stop_prompt="発話終了",
-        start_style={"color":"white", "background-color":"black"},
-        pause_style={"color":"gray", "background-color":"white"},
-        stop_style={"color":"white", "background-color":"black"}
-    )
+    # 出力ディレクトリを作成
+    os.makedirs(os.path.dirname(audio_input_file_path), exist_ok=True)
 
-    if len(audio) > 0:
-        audio.export(audio_input_file_path, format="wav")
-    else:
-        st.stop()
+    st.info("🎤 録音開始。発話後、5秒間沈黙すると自動で停止します。")
+
+    recorded_data = []
+    amplitude_list = []  # コールバック→ループ間で最新の振幅を共有するためのリスト
+    start_time = time.time()
+    # 最後に「音あり」と判定した時刻（初期値は開始時刻）
+    last_sound_time = [start_time]  # mutable container を使ってコールバックから書き換え可能にする
+
+    # grace period: 録音開始直後の安定化時間（この間は無音判定を行わない）
+    grace_period = 0.8  # 0.8秒程度が安定しやすいです。必要に応じて調整してください。
+
+    # UI 要素
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    chunk_duration = 0.1  # ループのsleep間隔（短めにするとUIレスポンスが良くなる）
+    # コールバック（音声データの受け取りはここで行う）
+    def callback(indata, frames, time_info, status):
+        # indata は float32 の -1.0 .. 1.0 スケールが期待される
+        recorded_data.append(indata.copy())
+        amplitude = float(np.max(np.abs(indata)))
+        amplitude_list.append(amplitude)
+        # コールバック内では時刻だけ更新（UI操作はしない）
+        # 実際の last_sound_time 更新は、後段の if amplitude >= threshold で行うか、ここでも行って良い
+        if amplitude >= silence_threshold:
+            last_sound_time[0] = time.time()
+
+    # 録音ストリームを開いてメインループで UI 更新と無音秒数判定を行う
+    with sd.InputStream(samplerate=samplerate, channels=channels, callback=callback):
+        while True:
+            time.sleep(chunk_duration)  # コールバックは別スレッドで動く
+            now = time.time()
+
+            # まだ grace_period 内なら無音時間は 0 にして経過を表示する
+            if now - start_time < grace_period:
+                silent_time = 0.0
+            else:
+                silent_time = now - last_sound_time[0]
+
+            # UI をメインスレッド側で安全に更新
+            last_amp = amplitude_list[-1] if amplitude_list else 0.0
+            status_text.text(f"音量: {last_amp:.3f} / 無音 {silent_time:.2f} 秒")
+            progress_bar.progress(min(int((silent_time / silence_duration) * 100), 100))
+
+            # 無音が指定秒数続いたら終了
+            if silent_time >= silence_duration:
+                break
+
+    st.success(f"✅ 録音終了（{silence_duration}秒間無音を検知）")
+
+    # WAV保存（float32 -> int16）
+    recorded_data_np = np.concatenate(recorded_data)
+    # もしステレオで shape (N,2) の場合、wave.writeframes は interleaved int16 を期待するので変換する
+    # recorded_data_np は float32 の範囲 [-1,1]
+    with wave.open(audio_input_file_path, 'w') as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(samplerate)
+        wf.writeframes((recorded_data_np * 32767).astype(np.int16).tobytes())
+
+    # UI の片付け
+    progress_bar.empty()
+    status_text.empty()
+
+    return audio_input_file_path
 
 def transcribe_audio(audio_input_file_path):
     """

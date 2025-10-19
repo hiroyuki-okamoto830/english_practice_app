@@ -53,6 +53,7 @@ if "messages" not in st.session_state:
     st.session_state.dictation_evaluation_first_flg = True
     st.session_state.chat_open_flg = False
     st.session_state.problem = ""
+    st.session_state.pause_flg = False  # 👈 一時停止フラグを追加
 
     #ChatOpenAIの初期化を一度だけ行い、全体で共有する
     st.session_state.openai_obj = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -71,19 +72,27 @@ if "messages" not in st.session_state:
     )
 
 # 初期表示
-col1, col2, col3, col4 = st.columns([2, 2, 3, 3])
-with col1:
-    st.markdown("<div style='height:37px;'></div>", unsafe_allow_html=True)
-    if st.session_state.start_flg:
-        st.button("開始", use_container_width=True, type="primary")
-    else:
-        st.session_state.start_flg = st.button("開始", use_container_width=True, type="primary")
-with col2:
+# --- 上段：再生速度・練習モード・レベル選択 ---
+col_speed, col_mode, col_level = st.columns([2, 3, 3])
+
+with col_speed:
     st.markdown("<small style='display:block; text-align:center;'>再生速度選択</small>", unsafe_allow_html=True)
-    st.session_state.speed = st.selectbox(label="再生速度", options=ct.PLAY_SPEED_OPTION, index=3, label_visibility="collapsed")
-with col3:
+    st.session_state.speed = st.selectbox(
+        label="再生速度",
+        options=ct.PLAY_SPEED_OPTION,
+        index=3,
+        label_visibility="collapsed"
+    )
+
+with col_mode:
     st.markdown("<small style='display:block; text-align:center;'>練習モード選択</small>", unsafe_allow_html=True)
-    st.session_state.mode = st.selectbox(label="モード", options=[ct.MODE_1, ct.MODE_2, ct.MODE_3], label_visibility="collapsed")
+    st.session_state.mode = st.selectbox(
+        label="モード",
+        options=[ct.MODE_1, ct.MODE_2, ct.MODE_3],
+        label_visibility="collapsed"
+    )
+
+    # モード変更時の状態リセット処理
     if st.session_state.mode != st.session_state.pre_mode:
         st.session_state.start_flg = False
         if st.session_state.mode == ct.MODE_1:
@@ -97,9 +106,36 @@ with col3:
             st.session_state.shadowing_flg = False
         st.session_state.chat_open_flg = False
     st.session_state.pre_mode = st.session_state.mode
-with col4:
+
+with col_level:
     st.markdown("<small style='display:block; text-align:center;'>レベル選択</small>", unsafe_allow_html=True)
-    st.session_state.englv = st.selectbox(label="英語レベル", options=ct.ENGLISH_LEVEL_OPTION, label_visibility="collapsed")
+    st.session_state.englv = st.selectbox(
+        label="英語レベル",
+        options=ct.ENGLISH_LEVEL_OPTION,
+        label_visibility="collapsed"
+    )
+
+# --- 区切り線 ---
+st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+
+# --- 下段：開始・一時停止ボタンを横並びで配置 ---
+col_start, col_pause = st.columns([1, 1])
+
+with col_start:
+    if st.session_state.start_flg:
+        st.button("開始", use_container_width=True, type="primary")
+    else:
+        st.session_state.start_flg = st.button("開始", use_container_width=True, type="primary")
+
+with col_pause:
+    if st.session_state.start_flg:
+        if st.button("⏸ 一時停止", use_container_width=True):
+            st.session_state.pause_flg = not st.session_state.pause_flg
+            if st.session_state.pause_flg:
+                st.warning("⏸ 一時停止中です。再開するにはもう一度押してください。")
+            else:
+                st.success("▶ 再開しました。")
+            st.stop()
 
 with st.chat_message("assistant", avatar="images/ai_icon.jpg"):
     st.markdown("こちらは生成AIによる音声英会話の練習アプリです。何度も繰り返し練習し、英語力をアップさせましょう。")

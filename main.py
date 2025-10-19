@@ -73,13 +73,16 @@ if "messages" not in st.session_state:
 # 初期表示
 col1, col2, col3, col4 = st.columns([2, 2, 3, 3])
 with col1:
+    st.markdown("<div style='height:37px;'></div>", unsafe_allow_html=True)
     if st.session_state.start_flg:
         st.button("開始", use_container_width=True, type="primary")
     else:
         st.session_state.start_flg = st.button("開始", use_container_width=True, type="primary")
 with col2:
+    st.markdown("<small style='display:block; text-align:center;'>再生速度選択</small>", unsafe_allow_html=True)
     st.session_state.speed = st.selectbox(label="再生速度", options=ct.PLAY_SPEED_OPTION, index=3, label_visibility="collapsed")
 with col3:
+    st.markdown("<small style='display:block; text-align:center;'>練習モード選択</small>", unsafe_allow_html=True)
     st.session_state.mode = st.selectbox(label="モード", options=[ct.MODE_1, ct.MODE_2, ct.MODE_3], label_visibility="collapsed")
     if st.session_state.mode != st.session_state.pre_mode:
         st.session_state.start_flg = False
@@ -95,6 +98,7 @@ with col3:
         st.session_state.chat_open_flg = False
     st.session_state.pre_mode = st.session_state.mode
 with col4:
+    st.markdown("<small style='display:block; text-align:center;'>レベル選択</small>", unsafe_allow_html=True)
     st.session_state.englv = st.selectbox(label="英語レベル", options=ct.ENGLISH_LEVEL_OPTION, label_visibility="collapsed")
 
 with st.chat_message("assistant", avatar="images/ai_icon.jpg"):
